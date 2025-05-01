@@ -26,7 +26,6 @@ const GameCanvas = () => {
     bullets: [],
     enemies: [],
     enemyBullets: [],
-    lastEnemyShoot: 0,
     particles: [],
     enemyCount: 0
   });
@@ -76,11 +75,12 @@ const GameCanvas = () => {
         y: Math.random() * (canvas.height - 30),
         width: 40,
         height: 30,
-        speedY: Math.random() > 0.5 ? 1.5 : -1.5
+        speedY: Math.random() > 0.5 ? 1.5 : -1.5,
+        nextShot: Date.now() + Math.random() * 1000, // Random initial delay (0-1s)
+        shootInterval: 300 // Fixed 0.3s between shots
       });
       gameState.current.enemyCount++;
       
-      // Aggressive spawn rate increase
       if (gameState.current.enemyCount % 2 === 0) {
         setSpawnRate(prev => Math.max(400, prev * 0.85));
       }
@@ -138,12 +138,26 @@ const GameCanvas = () => {
       return bullet.x < canvasRef.current.width;
     });
 
-    // Enemy movement (vertical only)
+    // Enemy updates
     state.enemies = state.enemies.filter(enemy => {
+      // Vertical movement
       enemy.y += enemy.speedY * (deltaTime / 16);
       if (enemy.y <= 0 || enemy.y >= canvasRef.current.height - enemy.height) {
         enemy.speedY *= -1;
       }
+
+      // Individual shooting logic
+      if (Date.now() > enemy.nextShot) {
+        state.enemyBullets.push({
+          x: enemy.x,
+          y: enemy.y + enemy.height / 2,
+          width: 10,
+          height: 5,
+          speed: -6
+        });
+        enemy.nextShot = Date.now() + enemy.shootInterval;
+      }
+      
       return true;
     });
 
@@ -161,20 +175,6 @@ const GameCanvas = () => {
       }
       return true;
     });
-
-    // Enemy shooting
-    if (Date.now() - state.lastEnemyShoot > 1000) {
-      state.enemies.forEach(enemy => {
-        state.enemyBullets.push({
-          x: enemy.x,
-          y: enemy.y + enemy.height / 2,
-          width: 10,
-          height: 5,
-          speed: -6
-        });
-      });
-      state.lastEnemyShoot = Date.now();
-    }
 
     // Enemy bullet handling
     state.enemyBullets = state.enemyBullets.filter(bullet => {
