@@ -17,8 +17,8 @@ const GameCanvas = () => {
       width: 40,
       height: 30,
       velocity: 0,
-      gravity: 0.5,
-      jumpForce: -10,
+      gravity: 0.3,  // Reduced gravity
+      jumpForce: -8,  // Reduced jump force
       bulletCooldown: 0,
       invulnerable: false
     },
@@ -72,13 +72,11 @@ const GameCanvas = () => {
 
     const spawnEnemy = () => {
       gameState.current.enemies.push({
-        x: canvas.width - 50,
+        x: canvas.width - 100,  // Fixed position
         y: Math.random() * (canvas.height - 30),
         width: 40,
         height: 30,
-        speedX: -1,
-        speedY: 1,
-        direction: Math.random() > 0.5 ? 'up' : 'down' // Add vertical movement
+        speedY: 1  // Only vertical movement
       });
     };
 
@@ -93,7 +91,7 @@ const GameCanvas = () => {
     };
 
     animationFrameId.current = requestAnimationFrame(gameLoop);
-    enemySpawnInterval.current = setInterval(spawnEnemy, 3000);
+    enemySpawnInterval.current = setInterval(spawnEnemy, 2000);
     spawnEnemy();
 
     return () => {
@@ -108,9 +106,9 @@ const GameCanvas = () => {
     const state = gameState.current;
     const { player } = state;
 
-    // Player movement
+    // Player movement (slower)
     player.velocity = keys.current.Space ? player.jumpForce : player.velocity + player.gravity;
-    player.y = Math.max(0, Math.min(canvasRef.current.height - player.height, player.y + player.velocity));
+    player.y = Math.max(0, Math.min(canvasRef.current.height - player.height, player.y + player.velocity * 0.5));
 
     // Player shooting
     if (keys.current.Enter && player.bulletCooldown <= 0) {
@@ -119,9 +117,9 @@ const GameCanvas = () => {
         y: player.y + player.height / 2,
         width: 10,
         height: 5,
-        speed: 12
+        speed: 8  // Slower bullets
       });
-      player.bulletCooldown = 100;
+      player.bulletCooldown = 150;
     }
     player.bulletCooldown -= deltaTime;
 
@@ -131,20 +129,16 @@ const GameCanvas = () => {
       return bullet.x < canvasRef.current.width;
     });
 
-    // Update enemies with vertical movement
+    // Update enemies (only vertical movement)
     state.enemies = state.enemies.filter(enemy => {
-      // Horizontal movement
-      enemy.x += enemy.speedX * (deltaTime / 16);
-      
-      // Vertical movement
+      // Vertical movement only
       enemy.y += enemy.speedY * (deltaTime / 16);
       
-      // Reverse direction when hitting boundaries
+      // Reverse direction at boundaries
       if (enemy.y <= 0 || enemy.y >= canvasRef.current.height - enemy.height) {
         enemy.speedY *= -1;
       }
-      
-      return enemy.x > -enemy.width;
+      return true; // Enemies stay until destroyed
     });
 
     // Bullet-enemy collision
@@ -156,43 +150,42 @@ const GameCanvas = () => {
       if (hitEnemyIndex > -1) {
         state.enemies.splice(hitEnemyIndex, 1);
         createExplosion(bullet.x, bullet.y);
-        setScore(prev => prev + 100); // Fixed score update
+        setScore(prevScore => prevScore + 100); // Fixed score update
         return false;
       }
       return true;
     });
 
     // Enemy shooting
-    if (Date.now() - state.lastEnemyShoot > 2000) {
+    if (Date.now() - state.lastEnemyShoot > 1500) {
       state.enemies.forEach(enemy => {
         state.enemyBullets.push({
           x: enemy.x,
           y: enemy.y + enemy.height / 2,
           width: 10,
           height: 5,
-          speed: -8
+          speed: -6  // Slower enemy bullets
         });
       });
       state.lastEnemyShoot = Date.now();
     }
 
-    // Update enemy bullets with collision
-state.enemyBullets = state.enemyBullets.filter(bullet => {
-  bullet.x += bullet.speed * (deltaTime / 16);
-  
-  // Fixed condition syntax
-  if (checkCollision(bullet, player)) {
-    if (!player.invulnerable) {
-      setHealth(prev => Math.max(0, prev - 20));
-      player.invulnerable = true;
-      setTimeout(() => {
-        player.invulnerable = false;
-      }, 2000);
-    }
-    return false;
-  }
-  return bullet.x > 0;
-});
+    // Enemy bullet collision with player
+    state.enemyBullets = state.enemyBullets.filter(bullet => {
+      bullet.x += bullet.speed * (deltaTime / 16);
+      
+      if (checkCollision(bullet, player)) {
+        if (!player.invulnerable) {
+          setHealth(prevHealth => Math.max(0, prevHealth - 20)); // Fixed health update
+          player.invulnerable = true;
+          setTimeout(() => {
+            player.invulnerable = false;
+          }, 2000);
+        }
+        return false;
+      }
+      return bullet.x > 0;
+    });
 
     // Update particles
     state.particles = state.particles.filter(p => {
@@ -227,7 +220,7 @@ state.enemyBullets = state.enemyBullets.filter(bullet => {
       ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
     });
 
-    // Enemies
+    // Enemies (stationary horizontally)
     ctx.fillStyle = '#ff0000';
     enemies.forEach(enemy => {
       ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
