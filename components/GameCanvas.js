@@ -76,8 +76,8 @@ const GameCanvas = () => {
         width: 40,
         height: 30,
         speedY: Math.random() > 0.5 ? 1.5 : -1.5,
-        nextShot: Date.now() + Math.random() * 1000, // Random initial delay (0-1s)
-        shootInterval: 300 // Fixed 0.3s between shots
+        nextShot: Date.now() + Math.random() * 1000,
+        shootInterval: 300
       });
       gameState.current.enemyCount++;
       
@@ -119,41 +119,40 @@ const GameCanvas = () => {
     player.velocity = keys.current.Space ? player.jumpForce : player.velocity + player.gravity;
     player.y = Math.max(0, Math.min(canvasRef.current.height - player.height, player.y + player.velocity * 0.5));
 
-    // Shooting
+    // Player shooting
     if (keys.current.Enter && player.bulletCooldown <= 0) {
       state.bullets.push({
         x: player.x + player.width,
         y: player.y + player.height / 2,
         width: 10,
         height: 5,
-        speed: 8
+        speed: 400 // 400 pixels/sec
       });
       player.bulletCooldown = 150;
     }
     player.bulletCooldown -= deltaTime;
 
-    // Bullet updates
+    // Update player bullets
     state.bullets = state.bullets.filter(bullet => {
-      bullet.x += bullet.speed * (deltaTime / 16);
+      bullet.x += (bullet.speed * deltaTime) / 1000;
       return bullet.x < canvasRef.current.width;
     });
 
-    // Enemy updates
+    // Update enemies
     state.enemies = state.enemies.filter(enemy => {
-      // Vertical movement
-      enemy.y += enemy.speedY * (deltaTime / 16);
+      enemy.y += (enemy.speedY * deltaTime) / 16;
       if (enemy.y <= 0 || enemy.y >= canvasRef.current.height - enemy.height) {
         enemy.speedY *= -1;
       }
 
-      // Individual shooting logic
+      // Enemy shooting
       if (Date.now() > enemy.nextShot) {
         state.enemyBullets.push({
           x: enemy.x,
           y: enemy.y + enemy.height / 2,
-          width: 10,
-          height: 5,
-          speed: -6
+          width: 15,  // Larger hitbox
+          height: 8,
+          speed: -250 // Slower speed (250 pixels/sec)
         });
         enemy.nextShot = Date.now() + enemy.shootInterval;
       }
@@ -178,9 +177,24 @@ const GameCanvas = () => {
 
     // Enemy bullet handling
     state.enemyBullets = state.enemyBullets.filter(bullet => {
-      bullet.x += bullet.speed * (deltaTime / 16);
+      bullet.x += (bullet.speed * deltaTime) / 1000;
       
-      if (checkCollision(bullet, player)) {
+      // Expanded collision boxes
+      const bulletRect = {
+        x: bullet.x - 2,
+        y: bullet.y - 2,
+        width: bullet.width + 4,
+        height: bullet.height + 4
+      };
+
+      const playerRect = {
+        x: player.x - 5,
+        y: player.y - 5,
+        width: player.width + 10,
+        height: player.height + 10
+      };
+
+      if (checkCollision(bulletRect, playerRect)) {
         if (!player.invulnerable) {
           setHealth(prev => {
             const newHealth = Math.max(0, prev - 5);
@@ -197,7 +211,7 @@ const GameCanvas = () => {
       return bullet.x > 0;
     });
 
-    // Particles
+    // Update particles
     state.particles = state.particles.filter(p => {
       p.x += p.vx;
       p.y += p.vy;
