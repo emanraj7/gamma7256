@@ -9,7 +9,7 @@ const GameCanvas = () => {
   const [score, setScore] = useState(0);
   const [health, setHealth] = useState(100);
   const [gameOver, setGameOver] = useState(false);
-  const [spawnRate, setSpawnRate] = useState(2000);
+  const [spawnRate, setSpawnRate] = useState(1500);
 
   const gameState = useRef({
     player: {
@@ -31,20 +31,17 @@ const GameCanvas = () => {
     enemyCount: 0
   });
 
-  const checkCollision = (rect1, rect2) => {
-    return (
-      rect1.x < rect2.x + rect2.width &&
-      rect1.x + rect1.width > rect2.x &&
-      rect1.y < rect2.y + rect2.height &&
-      rect1.y + rect1.height > rect2.y
-    );
-  };
+  const checkCollision = (rect1, rect2) => (
+    rect1.x < rect2.x + rect2.width &&
+    rect1.x + rect1.width > rect2.x &&
+    rect1.y < rect2.y + rect2.height &&
+    rect1.y + rect1.height > rect2.y
+  );
 
   const createExplosion = (x, y) => {
     for(let i = 0; i < 15; i++) {
       gameState.current.particles.push({
-        x,
-        y,
+        x, y,
         vx: (Math.random() - 0.5) * 5,
         vy: (Math.random() - 0.5) * 5,
         life: 1.0
@@ -79,13 +76,13 @@ const GameCanvas = () => {
         y: Math.random() * (canvas.height - 30),
         width: 40,
         height: 30,
-        speedY: 1
+        speedY: Math.random() > 0.5 ? 1.5 : -1.5
       });
       gameState.current.enemyCount++;
       
-      // Increase spawn rate every 5 enemies
-      if (gameState.current.enemyCount % 5 === 0) {
-        setSpawnRate(prev => Math.max(800, prev * 0.9));
+      // Aggressive spawn rate increase
+      if (gameState.current.enemyCount % 2 === 0) {
+        setSpawnRate(prev => Math.max(400, prev * 0.85));
       }
     };
 
@@ -122,7 +119,7 @@ const GameCanvas = () => {
     player.velocity = keys.current.Space ? player.jumpForce : player.velocity + player.gravity;
     player.y = Math.max(0, Math.min(canvasRef.current.height - player.height, player.y + player.velocity * 0.5));
 
-    // Player shooting
+    // Shooting
     if (keys.current.Enter && player.bulletCooldown <= 0) {
       state.bullets.push({
         x: player.x + player.width,
@@ -135,13 +132,13 @@ const GameCanvas = () => {
     }
     player.bulletCooldown -= deltaTime;
 
-    // Update bullets
+    // Bullet updates
     state.bullets = state.bullets.filter(bullet => {
       bullet.x += bullet.speed * (deltaTime / 16);
       return bullet.x < canvasRef.current.width;
     });
 
-    // Update enemies
+    // Enemy movement (vertical only)
     state.enemies = state.enemies.filter(enemy => {
       enemy.y += enemy.speedY * (deltaTime / 16);
       if (enemy.y <= 0 || enemy.y >= canvasRef.current.height - enemy.height) {
@@ -166,7 +163,7 @@ const GameCanvas = () => {
     });
 
     // Enemy shooting
-    if (Date.now() - state.lastEnemyShoot > 1500) {
+    if (Date.now() - state.lastEnemyShoot > 1000) {
       state.enemies.forEach(enemy => {
         state.enemyBullets.push({
           x: enemy.x,
@@ -179,7 +176,7 @@ const GameCanvas = () => {
       state.lastEnemyShoot = Date.now();
     }
 
-    // Enemy bullet collision
+    // Enemy bullet handling
     state.enemyBullets = state.enemyBullets.filter(bullet => {
       bullet.x += bullet.speed * (deltaTime / 16);
       
@@ -200,7 +197,7 @@ const GameCanvas = () => {
       return bullet.x > 0;
     });
 
-    // Update particles
+    // Particles
     state.particles = state.particles.filter(p => {
       p.x += p.vx;
       p.y += p.vy;
@@ -214,6 +211,7 @@ const GameCanvas = () => {
 
     const { player, bullets, enemies, enemyBullets, particles } = gameState.current;
     
+    // Clear canvas
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
@@ -258,16 +256,17 @@ const GameCanvas = () => {
     ctx.fillStyle = '#00ff00';
     ctx.fillRect(10, 50, (200 * health) / 100, 20);
 
-    // Game Over Screen
+    // Game Over
     if (gameOver) {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
       ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = '#ff0000';
       ctx.font = '48px Arial';
       ctx.textAlign = 'center';
-      ctx.fillText('Game Over!', canvasRef.current.width/2, canvasRef.current.height/2);
+      ctx.fillText('GAME OVER', canvasRef.current.width/2, canvasRef.current.height/2);
       ctx.font = '24px Arial';
       ctx.fillText(`Final Score: ${score}`, canvasRef.current.width/2, canvasRef.current.height/2 + 50);
+      ctx.fillText('Refresh to play again', canvasRef.current.width/2, canvasRef.current.height/2 + 100);
     }
   };
 
