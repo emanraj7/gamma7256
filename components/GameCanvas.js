@@ -8,8 +8,9 @@ const GameCanvas = () => {
   const enemySpawnInterval = useRef(null);
   const [score, setScore] = useState(0);
   const [health, setHealth] = useState(100);
+  const [gameOver, setGameOver] = useState(false);
+  const [spawnRate, setSpawnRate] = useState(2000);
 
-  // Game state
   const gameState = useRef({
     player: {
       x: 50,
@@ -17,8 +18,8 @@ const GameCanvas = () => {
       width: 40,
       height: 30,
       velocity: 0,
-      gravity: 0.3,  // Reduced gravity
-      jumpForce: -8,  // Reduced jump force
+      gravity: 0.3,
+      jumpForce: -8,
       bulletCooldown: 0,
       invulnerable: false
     },
@@ -26,7 +27,8 @@ const GameCanvas = () => {
     enemies: [],
     enemyBullets: [],
     lastEnemyShoot: 0,
-    particles: []
+    particles: [],
+    enemyCount: 0
   });
 
   const checkCollision = (rect1, rect2) => {
@@ -51,12 +53,13 @@ const GameCanvas = () => {
   };
 
   useEffect(() => {
+    if (gameOver) return;
+
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     canvas.width = 800;
     canvas.height = 600;
 
-    // Input handlers
     const handleKeyDown = (e) => {
       if (e.code === 'Space') keys.current.Space = true;
       if (e.code === 'Enter') keys.current.Enter = true;
@@ -72,15 +75,23 @@ const GameCanvas = () => {
 
     const spawnEnemy = () => {
       gameState.current.enemies.push({
-        x: canvas.width - 100,  // Fixed position
+        x: canvas.width - 100,
         y: Math.random() * (canvas.height - 30),
         width: 40,
         height: 30,
-        speedY: 1  // Only vertical movement
+        speedY: 1
       });
+      gameState.current.enemyCount++;
+      
+      // Increase spawn rate every 5 enemies
+      if (gameState.current.enemyCount % 5 === 0) {
+        setSpawnRate(prev => Math.max(800, prev * 0.9));
+      }
     };
 
     const gameLoop = (timestamp) => {
+      if (gameOver) return;
+
       const deltaTime = timestamp - lastFrameTime.current;
       lastFrameTime.current = timestamp;
 
@@ -91,8 +102,7 @@ const GameCanvas = () => {
     };
 
     animationFrameId.current = requestAnimationFrame(gameLoop);
-    enemySpawnInterval.current = setInterval(spawnEnemy, 2000);
-    spawnEnemy();
+    enemySpawnInterval.current = setInterval(spawnEnemy, spawnRate);
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
@@ -100,13 +110,15 @@ const GameCanvas = () => {
       cancelAnimationFrame(animationFrameId.current);
       clearInterval(enemySpawnInterval.current);
     };
-  }, []);
+  }, [gameOver, spawnRate]);
 
   const updateGameState = (deltaTime) => {
+    if (gameOver) return;
+
     const state = gameState.current;
     const { player } = state;
 
-    // Player movement (slower)
+    // Player movement
     player.velocity = keys.current.Space ? player.jumpForce : player.velocity + player.gravity;
     player.y = Math.max(0, Math.min(canvasRef.current.height - player.height, player.y + player.velocity * 0.5));
 
@@ -117,7 +129,7 @@ const GameCanvas = () => {
         y: player.y + player.height / 2,
         width: 10,
         height: 5,
-        speed: 8  // Slower bullets
+        speed: 8
       });
       player.bulletCooldown = 150;
     }
@@ -129,16 +141,13 @@ const GameCanvas = () => {
       return bullet.x < canvasRef.current.width;
     });
 
-    // Update enemies (only vertical movement)
+    // Update enemies
     state.enemies = state.enemies.filter(enemy => {
-      // Vertical movement only
       enemy.y += enemy.speedY * (deltaTime / 16);
-      
-      // Reverse direction at boundaries
       if (enemy.y <= 0 || enemy.y >= canvasRef.current.height - enemy.height) {
         enemy.speedY *= -1;
       }
-      return true; // Enemies stay until destroyed
+      return true;
     });
 
     // Bullet-enemy collision
@@ -150,7 +159,7 @@ const GameCanvas = () => {
       if (hitEnemyIndex > -1) {
         state.enemies.splice(hitEnemyIndex, 1);
         createExplosion(bullet.x, bullet.y);
-        setScore(prevScore => prevScore + 100); // Fixed score update
+        setScore(prev => prev + 100);
         return false;
       }
       return true;
@@ -164,19 +173,23 @@ const GameCanvas = () => {
           y: enemy.y + enemy.height / 2,
           width: 10,
           height: 5,
-          speed: -6  // Slower enemy bullets
+          speed: -6
         });
       });
       state.lastEnemyShoot = Date.now();
     }
 
-    // Enemy bullet collision with player
+    // Enemy bullet collision
     state.enemyBullets = state.enemyBullets.filter(bullet => {
       bullet.x += bullet.speed * (deltaTime / 16);
       
       if (checkCollision(bullet, player)) {
         if (!player.invulnerable) {
-          setHealth(prevHealth => Math.max(0, prevHealth - 20)); // Fixed health update
+          setHealth(prev => {
+            const newHealth = Math.max(0, prev - 5);
+            if (newHealth === 0) setGameOver(true);
+            return newHealth;
+          });
           player.invulnerable = true;
           setTimeout(() => {
             player.invulnerable = false;
@@ -197,6 +210,8 @@ const GameCanvas = () => {
   };
 
   const render = (ctx) => {
+    if (gameOver) return;
+
     const { player, bullets, enemies, enemyBullets, particles } = gameState.current;
     
     ctx.fillStyle = '#000';
@@ -220,7 +235,7 @@ const GameCanvas = () => {
       ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
     });
 
-    // Enemies (stationary horizontally)
+    // Enemies
     ctx.fillStyle = '#ff0000';
     enemies.forEach(enemy => {
       ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
@@ -242,6 +257,18 @@ const GameCanvas = () => {
     ctx.fillRect(10, 50, 200, 20);
     ctx.fillStyle = '#00ff00';
     ctx.fillRect(10, 50, (200 * health) / 100, 20);
+
+    // Game Over Screen
+    if (gameOver) {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+      ctx.fillRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '48px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Game Over!', canvasRef.current.width/2, canvasRef.current.height/2);
+      ctx.font = '24px Arial';
+      ctx.fillText(`Final Score: ${score}`, canvasRef.current.width/2, canvasRef.current.height/2 + 50);
+    }
   };
 
   return <canvas ref={canvasRef} style={{ border: '1px solid #fff' }} />;
