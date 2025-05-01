@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const GameCanvas = () => {
   const canvasRef = useRef(null);
@@ -6,6 +6,8 @@ const GameCanvas = () => {
   const lastFrameTime = useRef(0);
   const keys = useRef({ Space: false, Enter: false });
   const enemySpawnInterval = useRef(null);
+  const [score, setScore] = useState(0);
+  const [health, setHealth] = useState(100);
 
   // Game state
   const gameState = useRef({
@@ -17,13 +19,38 @@ const GameCanvas = () => {
       velocity: 0,
       gravity: 0.5,
       jumpForce: -10,
-      bulletCooldown: 0
+      bulletCooldown: 0,
+      invulnerable: false
     },
     bullets: [],
     enemies: [],
     enemyBullets: [],
-    lastEnemyShoot: 0
+    lastEnemyShoot: 0,
+    particles: []
   });
+
+  // Collision detection
+  const checkCollision = (rect1, rect2) => {
+    return (
+      rect1.x < rect2.x + rect2.width &&
+      rect1.x + rect1.width > rect2.x &&
+      rect1.y < rect2.y + rect2.height &&
+      rect1.y + rect1.height > rect2.y
+    );
+  };
+
+  // Create explosion particles
+  const createExplosion = (x, y) => {
+    for(let i = 0; i < 15; i++) {
+      gameState.current.particles.push({
+        x,
+        y,
+        vx: (Math.random() - 0.5) * 5,
+        vy: (Math.random() - 0.5) * 5,
+        life: 1.0
+      });
+    }
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -103,13 +130,30 @@ const GameCanvas = () => {
     player.bulletCooldown -= deltaTime;
 
     // Update bullets
-    state.bullets = state.bullets.filter(bullet => bullet.x < canvasRef.current.width);
-    state.bullets.forEach(bullet => bullet.x += bullet.speed * (deltaTime / 16));
+    state.bullets = state.bullets.filter(bullet => {
+      bullet.x += bullet.speed * (deltaTime / 16);
+      return bullet.x < canvasRef.current.width;
+    });
 
     // Update enemies
     state.enemies = state.enemies.filter(enemy => {
       enemy.x += enemy.speed * (deltaTime / 16);
       return enemy.x > -enemy.width;
+    });
+
+    // Bullet-enemy collision
+    state.bullets = state.bullets.filter(bullet => {
+      const hitEnemyIndex = state.enemies.findIndex(enemy => 
+        checkCollision(bullet, enemy)
+      );
+      
+      if (hitEnemyIndex > -1) {
+        state.enemies.splice(hitEnemyIndex, 1);
+        createExplosion(bullet.x, bullet.y);
+        setScore(s => s + 100);
+        return false;
+      }
+      return true;
     });
 
     // Enemy shooting
@@ -127,19 +171,47 @@ const GameCanvas = () => {
     }
 
     // Update enemy bullets
-    state.enemyBullets = state.enemyBullets.filter(bullet => bullet.x > 0);
-    state.enemyBullets.forEach(bullet => bullet.x += bullet.speed * (deltaTime / 16));
+    state.enemyBullets = state.enemyBullets.filter(bullet => {
+      bullet.x += bullet.speed * (deltaTime / 16);
+      
+      // Player collision check
+      if (checkCollision(bullet, player) && !player.invulnerable) {
+        setHealth(h => Math.max(0, h - 20));
+        player.invulnerable = true;
+        setTimeout(() => {
+          player.invulnerable = false;
+        }, 2000);
+        return false;
+      }
+      return bullet.x > 0;
+    });
+
+    // Update particles
+    state.particles = state.particles.filter(p => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life -= 0.03;
+      return p.life > 0;
+    });
   };
 
   const render = (ctx) => {
-    const { player, bullets, enemies, enemyBullets } = gameState.current;
+    const { player, bullets, enemies, enemyBullets, particles } = gameState.current;
     
     // Clear canvas
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
+    // Draw particles
+    ctx.fillStyle = '#ff8800';
+    particles.forEach(p => {
+      ctx.globalAlpha = p.life;
+      ctx.fillRect(p.x, p.y, 5, 5);
+    });
+    ctx.globalAlpha = 1.0;
+
     // Draw player
-    ctx.fillStyle = '#00ff00';
+    ctx.fillStyle = player.invulnerable ? '#00ff0088' : '#00ff00';
     ctx.fillRect(player.x, player.y, player.width, player.height);
 
     // Draw bullets
@@ -159,6 +231,17 @@ const GameCanvas = () => {
     enemyBullets.forEach(bullet => {
       ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
     });
+
+    // Draw UI
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '24px Arial';
+    ctx.fillText(`Score: ${score}`, 10, 30);
+    
+    // Health bar
+    ctx.fillStyle = '#ff0000';
+    ctx.fillRect(10, 50, 200, 20);
+    ctx.fillStyle = '#00ff00';
+    ctx.fillRect(10, 50, (200 * health) / 100, 20);
   };
 
   return <canvas ref={canvasRef} style={{ border: '1px solid #fff' }} />;
