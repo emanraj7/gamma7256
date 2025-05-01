@@ -5,6 +5,7 @@ const GameCanvas = () => {
   const animationFrameId = useRef(null);
   const lastFrameTime = useRef(0);
   const keys = useRef({ Space: false, Enter: false });
+  const enemySpawnInterval = useRef(null);
 
   // Game state
   const gameState = useRef({
@@ -44,6 +45,17 @@ const GameCanvas = () => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
+    // Enemy spawning
+    const spawnEnemy = () => {
+      gameState.current.enemies.push({
+        x: canvas.width - 50,
+        y: Math.random() * (canvas.height - 30),
+        width: 40,
+        height: 30,
+        speed: -1
+      });
+    };
+
     // Game loop
     const gameLoop = (timestamp) => {
       const deltaTime = timestamp - lastFrameTime.current;
@@ -55,13 +67,17 @@ const GameCanvas = () => {
       animationFrameId.current = requestAnimationFrame(gameLoop);
     };
 
+    // Start game systems
     animationFrameId.current = requestAnimationFrame(gameLoop);
+    enemySpawnInterval.current = setInterval(spawnEnemy, 3000);
+    spawnEnemy();
 
     // Cleanup
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
       cancelAnimationFrame(animationFrameId.current);
+      clearInterval(enemySpawnInterval.current);
     };
   }, []);
 
@@ -90,7 +106,13 @@ const GameCanvas = () => {
     state.bullets = state.bullets.filter(bullet => bullet.x < canvasRef.current.width);
     state.bullets.forEach(bullet => bullet.x += bullet.speed * (deltaTime / 16));
 
-    // Enemy logic
+    // Update enemies
+    state.enemies = state.enemies.filter(enemy => {
+      enemy.x += enemy.speed * (deltaTime / 16);
+      return enemy.x > -enemy.width;
+    });
+
+    // Enemy shooting
     if (Date.now() - state.lastEnemyShoot > 2000) {
       state.enemies.forEach(enemy => {
         state.enemyBullets.push({
