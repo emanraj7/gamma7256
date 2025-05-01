@@ -177,22 +177,22 @@ const GameCanvas = () => {
     }
 
     // Update enemy bullets with collision
-    state.enemyBullets = state.enemyBullets.filter(bullet => {
-      bullet.x += bullet.speed * (deltaTime / 16);
-      
-      // Player collision
-      if (checkCollision(bullet, player) {
-        if (!player.invulnerable) {
-          setHealth(prev => Math.max(0, prev - 20));
-          player.invulnerable = true;
-          setTimeout(() => {
-            player.invulnerable = false;
-          }, 2000);
-        }
-        return false;
-      }
-      return bullet.x > 0;
-    });
+state.enemyBullets = state.enemyBullets.filter(bullet => {
+  bullet.x += bullet.speed * (deltaTime / 16);
+  
+  // Fixed condition syntax
+  if (checkCollision(bullet, player)) {
+    if (!player.invulnerable) {
+      setHealth(prev => Math.max(0, prev - 20));
+      player.invulnerable = true;
+      setTimeout(() => {
+        player.invulnerable = false;
+      }, 2000);
+    }
+    return false;
+  }
+  return bullet.x > 0;
+});
 
     // Update particles
     state.particles = state.particles.filter(p => {
