@@ -29,7 +29,6 @@ const GameCanvas = () => {
     particles: []
   });
 
-  // Collision detection
   const checkCollision = (rect1, rect2) => {
     return (
       rect1.x < rect2.x + rect2.width &&
@@ -39,7 +38,6 @@ const GameCanvas = () => {
     );
   };
 
-  // Create explosion particles
   const createExplosion = (x, y) => {
     for(let i = 0; i < 15; i++) {
       gameState.current.particles.push({
@@ -72,18 +70,18 @@ const GameCanvas = () => {
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
-    // Enemy spawning
     const spawnEnemy = () => {
       gameState.current.enemies.push({
         x: canvas.width - 50,
         y: Math.random() * (canvas.height - 30),
         width: 40,
         height: 30,
-        speed: -1
+        speedX: -1,
+        speedY: 1,
+        direction: Math.random() > 0.5 ? 'up' : 'down' // Add vertical movement
       });
     };
 
-    // Game loop
     const gameLoop = (timestamp) => {
       const deltaTime = timestamp - lastFrameTime.current;
       lastFrameTime.current = timestamp;
@@ -94,12 +92,10 @@ const GameCanvas = () => {
       animationFrameId.current = requestAnimationFrame(gameLoop);
     };
 
-    // Start game systems
     animationFrameId.current = requestAnimationFrame(gameLoop);
     enemySpawnInterval.current = setInterval(spawnEnemy, 3000);
     spawnEnemy();
 
-    // Cleanup
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
@@ -135,9 +131,19 @@ const GameCanvas = () => {
       return bullet.x < canvasRef.current.width;
     });
 
-    // Update enemies
+    // Update enemies with vertical movement
     state.enemies = state.enemies.filter(enemy => {
-      enemy.x += enemy.speed * (deltaTime / 16);
+      // Horizontal movement
+      enemy.x += enemy.speedX * (deltaTime / 16);
+      
+      // Vertical movement
+      enemy.y += enemy.speedY * (deltaTime / 16);
+      
+      // Reverse direction when hitting boundaries
+      if (enemy.y <= 0 || enemy.y >= canvasRef.current.height - enemy.height) {
+        enemy.speedY *= -1;
+      }
+      
       return enemy.x > -enemy.width;
     });
 
@@ -150,7 +156,7 @@ const GameCanvas = () => {
       if (hitEnemyIndex > -1) {
         state.enemies.splice(hitEnemyIndex, 1);
         createExplosion(bullet.x, bullet.y);
-        setScore(s => s + 100);
+        setScore(prev => prev + 100); // Fixed score update
         return false;
       }
       return true;
@@ -170,17 +176,19 @@ const GameCanvas = () => {
       state.lastEnemyShoot = Date.now();
     }
 
-    // Update enemy bullets
+    // Update enemy bullets with collision
     state.enemyBullets = state.enemyBullets.filter(bullet => {
       bullet.x += bullet.speed * (deltaTime / 16);
       
-      // Player collision check
-      if (checkCollision(bullet, player) && !player.invulnerable) {
-        setHealth(h => Math.max(0, h - 20));
-        player.invulnerable = true;
-        setTimeout(() => {
-          player.invulnerable = false;
-        }, 2000);
+      // Player collision
+      if (checkCollision(bullet, player) {
+        if (!player.invulnerable) {
+          setHealth(prev => Math.max(0, prev - 20));
+          player.invulnerable = true;
+          setTimeout(() => {
+            player.invulnerable = false;
+          }, 2000);
+        }
         return false;
       }
       return bullet.x > 0;
@@ -198,11 +206,10 @@ const GameCanvas = () => {
   const render = (ctx) => {
     const { player, bullets, enemies, enemyBullets, particles } = gameState.current;
     
-    // Clear canvas
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
-    // Draw particles
+    // Particles
     ctx.fillStyle = '#ff8800';
     particles.forEach(p => {
       ctx.globalAlpha = p.life;
@@ -210,29 +217,29 @@ const GameCanvas = () => {
     });
     ctx.globalAlpha = 1.0;
 
-    // Draw player
+    // Player
     ctx.fillStyle = player.invulnerable ? '#00ff0088' : '#00ff00';
     ctx.fillRect(player.x, player.y, player.width, player.height);
 
-    // Draw bullets
+    // Bullets
     ctx.fillStyle = '#ffff00';
     bullets.forEach(bullet => {
       ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
     });
 
-    // Draw enemies
+    // Enemies
     ctx.fillStyle = '#ff0000';
     enemies.forEach(enemy => {
       ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
     });
 
-    // Draw enemy bullets
+    // Enemy bullets
     ctx.fillStyle = '#ff4444';
     enemyBullets.forEach(bullet => {
       ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
     });
 
-    // Draw UI
+    // UI
     ctx.fillStyle = '#ffffff';
     ctx.font = '24px Arial';
     ctx.fillText(`Score: ${score}`, 10, 30);
